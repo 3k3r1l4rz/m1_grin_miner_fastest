@@ -7,7 +7,7 @@
 // prints POW_OK.
 //
 // build: make   (links submit_source/ for key derivation, job assignment and submit)
-// run:   ./bin/mine34_live 32 160 0    # edge bits, half-rounds per graph, 0 = mine until stopped
+// run:   ./bin/v2/mine34_live 32 160 0    # edge bits, half-rounds per graph, 0 = mine until stopped
 #import <Metal/Metal.h>
 #import <Foundation/Foundation.h>
 #include <stdint.h>
@@ -488,6 +488,7 @@ typedef struct{uint32_t n,xb,hmask;}D2PAR; // host mirror of kernel DP (hbuild/c
 
 int main(int argc,char**argv){
  @autoreleasepool{
+  if(!isatty(1)) setvbuf(stdout,NULL,_IOLBF,0); // headless logs: line-buffer so progress is visible and a crash cannot eat buffered output
   if(getenv("M1_QOS")){ int qrc=pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE,0); printf("QOS: USER_INTERACTIVE requested on main thread rc=%d (M1_QOS set; unset => untouched)\n",qrc); } // env-gated, default off
   u32 eb=argc>1?atoi(argv[1]):27, rounds=argc>2?atoi(argv[2]):160, maxkeys=argc>3?atoi(argv[3]):2000;
   u32 zbits=17; u64 nedges=1ULL<<eb; u32 nodemask=(eb>=32)?0xFFFFFFFFu:((1u<<eb)-1u);

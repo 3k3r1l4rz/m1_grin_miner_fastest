@@ -8,5 +8,5 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
 else
   echo "session $SESSION not running"
 fi
-pkill -f 'bin/m1_scheduler' 2>/dev/null
+pkill -f 'bin/v[12]/m1_scheduler' 2>/dev/null
 exit 0

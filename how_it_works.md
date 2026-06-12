@@ -30,7 +30,8 @@ stream it competitively.
 
 ## The pipeline
 
-One graph flows through five stages, all but the last on the GPU.
+One graph flows through five stages; everything except the final recovery
+and verification work runs on the GPU.
 
 1. Seed, level 1. Generate all 2^32 edges, compute one endpoint each by
    siphash, and scatter every edge into one of 128 coarse buckets keyed by the

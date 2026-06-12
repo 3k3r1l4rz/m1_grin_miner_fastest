@@ -5,6 +5,7 @@ set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; cd "$DIR"
 
 SESSION="${SESSION:-m1fast}"
+BINSET="${BINSET:-bin/v2}"   # bin/v2 = current build from this repo, bin/v1 = earlier prebuilt set
 SCHED_PORT="${SCHED_PORT:-3410}"
 NODE_HOST="${NODE_HOST:-127.0.0.1}"
 NODE_PORT="${NODE_PORT:-3416}"
@@ -28,10 +29,10 @@ tmux has-session -t "$SESSION" 2>/dev/null && { echo "session $SESSION already r
 mkdir -p logs
 TS="$(date +%Y%m%d-%H%M%S)"
 tmux new-session -d -s "$SESSION" "cd '$DIR' && \
-  M1_SCHED_LISTEN=$SCHED_PORT M1_SCHED_NODE_HOST=$NODE_HOST M1_SCHED_NODE_PORT=$NODE_PORT ./bin/m1_scheduler > logs/sched-$TS.log 2>&1 & \
+  M1_SCHED_LISTEN=$SCHED_PORT M1_SCHED_NODE_HOST=$NODE_HOST M1_SCHED_NODE_PORT=$NODE_PORT ./$BINSET/m1_scheduler > logs/sched-$TS.log 2>&1 & \
   sleep 1; \
   M1_STRATUM_HOST=127.0.0.1 M1_STRATUM_PORT=$SCHED_PORT M1_STRATUM_LOGIN=$LOGIN M1_STRATUM_PASSWORD=x \
-  ./bin/mine34_live $EDGE_BITS $ROUNDS $MAXGRAPHS > logs/miner-$TS.log 2>&1; \
+  ./$BINSET/mine34_live $EDGE_BITS $ROUNDS $MAXGRAPHS > logs/miner-$TS.log 2>&1; \
   kill %1 2>/dev/null"
 sleep 2
 tmux has-session -t "$SESSION" && echo "started: tmux session $SESSION, logs/miner-$TS.log" || { echo "failed to start"; exit 1; }

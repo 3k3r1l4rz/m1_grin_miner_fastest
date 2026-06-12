@@ -16,7 +16,7 @@ does and why none of it can lose a cycle.
 
 ## Layout
 
-    Makefile               build everything into bin/ (system Apple clang only)
+    Makefile               build everything into bin/v2/ (system Apple clang only)
     start.sh / stop.sh     run the stack in a detached tmux session
     src/
       mine34_live.m        the miner: Metal solver, stratum client, submit path
@@ -29,13 +29,29 @@ does and why none of it can lose a cycle.
       strat_probe.c        standalone stratum login/job probe for node diagnostics
     tools/
       kernel_sync_check.py keeps src/mine34_kernels.metal in sync with the embedded source
-    bin/                   prebuilt arm64 binaries (also what make produces)
+    bin/v1/                earlier prebuilt arm64 binaries, kept as shipped
+    bin/v2/                current binaries built from this source (what make produces)
 
 The binaries are self-contained: they link only system frameworks (Metal,
 Foundation) and compile their Metal kernels at runtime from source embedded in
 the binary. Note that src/mine34_kernels.metal is a generated reference copy
 for reading; the miner never loads it. `make kernel-sync-check` verifies it
 matches the embedded source exactly.
+
+## Binary sets
+
+Two sets ship in bin/ and bin/SHA256SUMS covers both.
+
+v1 is the original fast build, kept byte-for-byte as it was first
+distributed. v2 is built from the source in this repository, which differs
+from v1 only in that the research instrumentation was removed from the
+source rather than disabled, two dead stores were dropped, and one
+defensive guard was added in the key-derivation library after a static
+analyzer pass. The two sets were verified equivalent on a 100-graph
+fixed-seed gate: identical survivor counts, arc counts and verdicts on
+every graph, the same two 42-cycles found and verified, and the same pace.
+The m1_scheduler binary is byte-identical between the sets because that
+source did not change. v2 adds strat_probe, which v1 did not include.
 
 ## Build
 
@@ -54,7 +70,7 @@ login succeeds but no job arrives, check the node side first. The strat_probe
 binary asks the node for a login and a job template and prints the raw
 replies, which settles quickly whether the node is the problem:
 
-    ./bin/strat_probe 127.0.0.1 3416
+    ./bin/v2/strat_probe 127.0.0.1 3416
 
 Then:
 
@@ -74,18 +90,18 @@ is faulted in. Warm steady state arrives by the second or third graph.
 
 The live binary has a deterministic pinned mode:
 
-    M1_FIXED_PREPOW=00 ./bin/mine34_live 32 160 100    # nonces 0..99 on a pinned pre_pow
+    M1_FIXED_PREPOW=00 ./bin/v2/mine34_live 32 160 100    # nonces 0..99 on a pinned pre_pow
 
 The range harness drives the identical engine from explicit keys, so it is the
 right tool for checking solver behaviour on arbitrary inputs. Two key loaders
 are built in:
 
     # grin style: k0..k3 = BLAKE2b-256(pre_pow || nonce as big endian u64)
-    ./bin/mine34_range_harness --mode grin-prepow --prepow <hex> -n <start_nonce> -r <count> [-e 32] [-m rounds]
+    ./bin/v2/mine34_range_harness --mode grin-prepow --prepow <hex> -n <start_nonce> -r <count> [-e 32] [-m rounds]
 
     # header80 style: nonce patched little endian into bytes 76..79, then BLAKE2b-256(header80)
-    ./bin/mine34_range_harness --mode tromp-header80 -x <160 hex chars> -n <start_nonce> -r <count> [-e 32] [-m rounds]
-    ./bin/mine34_range_harness --mode tromp-header80 -h <ascii header> -n <start_nonce> -r <count> [-e 32] [-m rounds]
+    ./bin/v2/mine34_range_harness --mode tromp-header80 -x <160 hex chars> -n <start_nonce> -r <count> [-e 32] [-m rounds]
+    ./bin/v2/mine34_range_harness --mode tromp-header80 -h <ascii header> -n <start_nonce> -r <count> [-e 32] [-m rounds]
 
 Each graph prints the nonce and the derived k0..k3, and any 42-cycle found is
 printed after passing verification. Matching keys means matching graph, so

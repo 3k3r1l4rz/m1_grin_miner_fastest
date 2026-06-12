@@ -11,8 +11,8 @@
 //     the miner stays on a single stable pre_pow per block; also write that pinned pre_pow's params to
 //     M1_SCHED_PIN_FILE so an external scorer sees the same pre_pow the miner is mining.
 //
-// build:  make   (or: xcrun clang -O2 -o bin/m1_scheduler scheduler/m1_scheduler.c)
-// run:    M1_SCHED_LISTEN=3410 M1_SCHED_NODE_PORT=3416 [M1_SCHED_PIN=1 M1_SCHED_PIN_FILE=/tmp/m1_pinned.json] ./bin/m1_scheduler
+// build:  make   (or: xcrun clang -O2 -o bin/v2/m1_scheduler scheduler/m1_scheduler.c)
+// run:    M1_SCHED_LISTEN=3410 M1_SCHED_NODE_PORT=3416 [M1_SCHED_PIN=1 M1_SCHED_PIN_FILE=/tmp/m1_pinned.json] ./bin/v2/m1_scheduler
 
 #include <stdio.h>
 #include <stdlib.h>
