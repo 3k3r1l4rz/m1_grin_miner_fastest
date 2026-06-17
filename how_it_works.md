@@ -6,27 +6,32 @@ miner was tuned on, with the methodology noted where it matters.
 
 ## The problem
 
-Grin's Cuckatoo-32 proof of work asks for a 42-cycle in an enormous random
-bipartite graph. The graph has 2^31 nodes on each side and 2^32 edges. Edge e
-has endpoints u = siphash(2e) and v = siphash(2e+1), masked to the node range,
-with the four siphash keys derived from the block header and the nonce. Most
-graphs contain no 42-cycle at all, so mining is a scan: derive keys for a
-nonce, search the graph, move to the next nonce, until a cycle is found whose
-hash also meets the network difficulty.
+Grin's Cuckatoo-32 proof of work asks for a 42-edge node-pair cycle in a huge random bipartite graph. 
+More precisely, set `N = 2^32`. The base graph `G_K` has `N` indexed edges on `N + N` base nodes.
+Edge `e` has base endpoints
 
-The standard approach, and the one used here, is edge trimming. An edge that
-touches a degree-1 node (a leaf) cannot lie on a cycle, so it can be removed.
-Removing edges creates new leaves, so the process iterates, shrinking the
-graph toward its 2-core, the part where every node has degree at least 2. Any
-42-cycle survives every round of this by definition. Once the survivor set is
-small, a conventional cycle search finishes the job.
+`u = siphash24(K, 2e) mod N`
 
-At edge bits 32 this is mostly a memory problem. The working set is a 93 GB
-arena, every trim round streams a large fraction of it, and the machine's
-memory bandwidth, not its arithmetic, sets the floor on how fast a graph can
-be processed. The M1 Ultra is interesting for this workload precisely because
-its unified memory is both large enough to hold the arena and fast enough to
-stream it competitively.
+and
+
+`v = siphash24(K, 2e + 1) mod N`
+
+where the SipHash key is derived from the block header and nonce.
+
+Cuckatoo then works with the node-pair graph `G'_K`, obtained by identifying base nodes that 
+differ only in the low bit. In that paired graph, each side has `2^31` node-pairs. A valid
+Cuckatoo32 proof is a 42-cycle in `G'_K` that is also a matching in `G_K`.
+
+Most graphs contain no valid 42-cycle, so mining is a scan: derive keys for a nonce, search
+the graph, move to the next nonce, and repeat. In live mode, a verified cycle is 
+submitted to the node, which checks it against the active target.
+
+The standard approach, and the one used here, is edge trimming. Under the Cuckatoo node-pair rule, 
+an edge cannot lie on a valid cycle if either endpoint has no live sibling endpoint on the 
+same side. Such an edge can be removed. Removing edges creates new dead endpoints, 
+so the process iterates, shrinking the graph toward the surviving core. 
+Any valid 42-cycle survives every exact trim round. Once the survivor set is small enough,
+a conventional recovery pass finishes the job.
 
 ## The pipeline
 
@@ -52,24 +57,21 @@ and verification work runs on the GPU.
    survivor population falls steeply in the early rounds and crawls in the
    late ones.
 
-4. Early-abort verdict. At round 64 the solver stops and asks one exact
-   question of the survivor set: does its edge-adjacency (edges joined through
-   a shared node under the Cuckatoo pairing) contain a closed walk of length
-   21, the length a 42-cycle must produce there? The mechanism is to emit the
-   survivor endpoints, build two open-addressing hash multimaps (u to edge and
-   v to edge), join on the paired key to produce the adjacency arcs, and run a
-   depth-bounded search for a closed walk, stopping at the first find because
-   only existence matters. If no such walk exists, the graph provably contains
-   no 42-cycle and is abandoned on the spot. About 98 percent of graphs leave
-   here, which is why the abort is worth so much wall time.
+ 4. Early-abort verdict. At round 64 the solver stops and applies a necessary-condition
+    test to the survivor set. A Cuckatoo32 42-cycle induces a closed
+    21-step walk in the solver's two-step edge-adjacency relation: each step advances
+    through one paired u endpoint and one paired v endpoint.
+    The verdict stage emits survivor endpoints, builds open-addressing
+    hash multimaps for the two sides, joins on the paired key, emits the two-step
+    adjacency arcs, and runs a bounded search for a closed 21-step walk.
+    If no such walk exists, and the verdict buffers did not overflow,
+    the survivor set cannot contain a Cuckatoo32 42-cycle, so the graph is abandoned.
 
-5. Recover and verify. Graphs that pass the verdict either have their
-   candidate walk lifted directly back to 42 concrete edge identities, or they
-   complete the remaining trim rounds and a 2-core peel, after which the host
-   recovers the cycle with a union-find pass. Either way the result is checked
-   in process with the reference verifier before the miner reports or submits
-   anything. A solution that does not verify is discarded, though in practice
-   this path exists as a guard rather than an event.
+ 6. Recover and verify. Graphs that pass the verdict either have a candidate 21-step walk lifted back
+    to 42 concrete edge identities and verified immediately, or they complete the remaining trim rounds
+    and a 2-core peel. The host then runs the recovery cycle-finder over the remaining
+    edge indices. In both paths, the final 42-edge candidate is checked with the verifier
+    before the miner reports or submits anything.
 
 ## Why the speed is exact
 
@@ -87,26 +89,26 @@ work that provably cannot matter. Nothing gates on a statistic or a heuristic.
   sequence is byte-identical to the unbatched path, so this is pure overhead
   removal.
 
-- Seed prefire uses GPU-idle windows. While the host is busy with the
-  post-peel tail of one graph, or while the verdict for an aborting graph is
-  being computed, the next nonce's seed stage is already running on a second
-  command queue with its own key buffer. If the current graph turns out to
-  need its fallback path, the prefired work is simply discarded. No path does
-  extra work; idle time is filled.
+- Seed prefire uses GPU-idle windows. While the host is busy with the post-peel
+  tail of one graph, or while the round-64 verdict is
+  being computed, the next nonce's seed stage can run on a second command queue
+  with its own key buffer. If the current graph continues
+  down the fallback path, the prefired work is waited on and discarded.
+  This does not change any survivor sequence or accepted proof;
+  it only spends otherwise idle device time.
 
-- The siphash kernel is a hand-lowered two-by-32-bit formulation with a
-  reduced final round. Every call site masks the result to at most 32 bits,
-  so the discarded half of the last round cancels exactly and skipping it is
-  free. The output was checked bit for bit against the reference on full
-  dumps, and the kernel measures about 13 percent faster, around 32 billion
-  siphashes per second.
-
-The correctness gate used throughout development is worth stating because it
-is the repo's standard for any future change: after a candidate optimization,
-the survivor set per round must be byte-identical to the previous code on a
-fixed-seed gate, and recall against the full-trim solver must be unchanged.
-A change that fails the gate does not ship, regardless of how much time it
-saves.
+- The SipHash kernel is a hand-lowered two-by-32-bit formulation specialized for the
+  demanded low 32 output bits used by Cuckatoo32
+  endpoint generation. The implementation is checked bit-for-bit against the full
+  reference path on endpoint dumps before being accepted.
+  In this build it measures about 13 percent faster, around 32 billion
+  endpoint hashes per second on the tuned M1 Ultra.
+  The correctness gate used throughout development is worth stating because it
+  is the repo's standard for any future change: after a candidate optimization,
+  the survivor set per round must be byte-identical to the previous code on a
+  fixed-seed gate, and recall against the full-trim solver must be unchanged.
+  A change that fails the gate does not ship, regardless of how much time it
+  saves.
 
 ## The scheduler
 
