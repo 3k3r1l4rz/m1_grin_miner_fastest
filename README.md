@@ -1,3 +1,4 @@
+<img width="1466" height="862" alt="Screenshot From 2026-06-14 23-50-19" src="https://github.com/user-attachments/assets/b476b35a-51fc-4ef1-8afc-311affa5292a" />
 # m1_grin_miner_fastest
 
 A standalone live Grin Cuckatoo-32 miner for Apple Silicon, tuned on a Mac
