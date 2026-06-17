@@ -18,9 +18,7 @@ excluded, identical protocol for every number so the ratios compare cleanly:
 That is roughly 170 percent faster than the prior best, and 27 percent over
 the already-fast baseline this effort started from. Live stratum mining
 against a real node measures 1.445 s per graph, about 2 percent over the
-fixed-seed number, the difference being job handling and key derivation.
-By the published bounty schedule the multiple works out to approximately
-1.41 BTC.
+fixed-seed number.
 
 ## Why the number is real
 
